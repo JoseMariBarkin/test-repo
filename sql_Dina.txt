@@ -1,0 +1,360 @@
+USE [FromJobs]
+GO
+/****** Object:  StoredProcedure [dbo].[SearchOrders__Using_EXEC]    Script Date: 11/24/2013 23:07:51 ******/
+SET ANSI_NULLS OFF
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+
+-- ==========================================================================================
+-- Author:		Jose Mari
+-- Create date: Oct 12 2012
+-- Description:	This stored procedure builds dynamic SQL and executes using EXEC
+--				OUTPUT: Descripction.
+-- ==========================================================================================
+
+ALTER PROCEDURE [dbo].[SearchOrders__Using_EXEC]
+	@ID_PETICION INT = null,
+	@FECHA_CREACION NVARCHAR(15) = '',
+	@FECHA_HASTA1 NVARCHAR(15) = '',
+	@FECHA_ENVIO NVARCHAR(15) = '',
+	@FECHA_HASTA2 NVARCHAR(15) = '',
+	@FECHA_FIRMA NVARCHAR(15) = '',
+	@FECHA_HASTA3 NVARCHAR(15) = '',
+	@PETICIONARIO INT = 0,
+	@INTERLOCUTOR INT= 0,
+	@CODDIRECCION INT = 0,
+	@PERFILUSER CHAR(3) = '',
+	@OBSERVACIONES NVARCHAR(200) = '',
+	@ESTADO INT = 11
+
+AS
+
+DECLARE @sql1 nvarchar(2000)
+
+SET TRANSACTION ISOLATION LEVEL READ COMMITTED
+BEGIN TRAN
+
+SELECT @sql1 = 
+    	
+    	'SELECT idPeticion, COALESCE(descripcion, '''') AS descripcion,
+		COALESCE(fecCreacion,NULL) as fecCreacion,
+        COALESCE(fecEnvio, NULL) AS fecEnvio,
+        COALESCE(fecFirma, NULL) AS fecFirma,
+        COALESCE(codPeticionario, '''') AS codPeticionario,
+        codInterlocutor, COALESCE(codDireccion, '''') AS codDireccion,
+        COALESCE(observaciones, '''') AS observaciones,
+        COALESCE(idEstado, '''') AS idEstado, ''idOtros'' = CASE
+        WHEN (Select count(*) from FDTIPeticion P 
+        inner join FDTIPeticionLinea PL on P.idPeticion=PL.idPeticion 
+        inner join FDTILineaProductosServicios PSL on PL.idPeticionLinea=PSL.idPeticionLinea 
+        inner join FDTIProductoServicio PS on PS.idProdServ=PSL.idProdServ where 
+        P.idPeticion=MP.idPeticion and PS.idOtro=''True'') > 0 THEN ''True'' ELSE ''False'' END FROM [dbo].FDTIPeticion MP where (1=1)' 
+
+/* check and build the WHERE clause. CASE: idPeticion  */
+    If (@ID_PETICION > 0)
+		SELECT @sql1 = @sql1 + ' AND idPeticion = ' + str(@ID_PETICION)
+        
+/* check and build the WHERE clause. CASE: fecCreacion  */
+    if (@FECHA_CREACION <> '' AND @FECHA_HASTA1 <> '') 
+		SELECT @sql1 = @sql1 + ' AND fecCreacion BETWEEN CONVERT(DATETIME, ''' + RTRIM(@FECHA_CREACION) + ''' , 103) AND CONVERT(DATETIME, ''' + @FECHA_HASTA1 + ''', 103)'
+	if (@FECHA_CREACION = '' AND @FECHA_HASTA1 <> '') 
+		SELECT @sql1 = @sql1 + ' AND fecCreacion <= CONVERT(DATETIME, ''' + RTRIM(@FECHA_HASTA1) + ''', 103)'
+	if (@FECHA_CREACION <> '' AND @FECHA_HASTA1 = '') 
+		SELECT @sql1 = @sql1 + ' AND fecCreacion >= CONVERT(DATETIME, ''' + RTRIM(@FECHA_CREACION) + ''', 103)'
+ 
+ /* check and build the WHERE clause. CASE: fecEnvio  */
+	if (@FECHA_ENVIO <> '' AND @FECHA_HASTA2 <> '') 
+		SELECT @sql1 = @sql1 + ' AND fecEnvio BETWEEN CONVERT(DATETIME, ''' + RTRIM(@FECHA_ENVIO) + ''' , 103) AND CONVERT(DATETIME, ''' + @FECHA_HASTA2 + ''', 103)'
+	if (@FECHA_ENVIO = '' AND @FECHA_HASTA2 <> '') 
+		SELECT @sql1 = @sql1 + ' AND fecEnvio <= CONVERT(DATETIME, ''' + RTRIM(@FECHA_HASTA2) + ''', 103)'
+	if (@FECHA_ENVIO <> '' AND @FECHA_HASTA2 = '') 
+		SELECT @sql1 = @sql1 + ' AND fecEnvio >= CONVERT(DATETIME, ''' + RTRIM(@FECHA_ENVIO) + ''', 103)'
+ 
+ /* check and build the WHERE clause. CASE: fecFirma  */
+	if (@FECHA_FIRMA <> '' AND @FECHA_HASTA3 <> '') 
+		SELECT @sql1 = @sql1 + ' AND fecEnvio BETWEEN CONVERT(DATETIME, ''' + RTRIM(@FECHA_FIRMA) + ''' , 103) AND CONVERT(DATETIME, ''' + @FECHA_HASTA3 + ''', 103)'
+	if (@FECHA_FIRMA = '' AND @FECHA_HASTA3 <> '') 
+		SELECT @sql1 = @sql1 + ' AND fecEnvio <= CONVERT(DATETIME, ''' + RTRIM(@FECHA_HASTA3) + ''', 103)'
+	if (@FECHA_FIRMA <> '' AND @FECHA_HASTA3 = '') 
+		SELECT @sql1 = @sql1 + ' AND fecEnvio >= CONVERT(DATETIME, ''' + RTRIM(@FECHA_FIRMA) + ''', 103)'
+    
+/* check and build the WHERE clause. CASE: codPeticionario  */
+	If (@PETICIONARIO > 0)
+         SELECT @sql1 = @sql1 + ' AND codPeticionario = ' + str(@PETICIONARIO)
+         
+/* check and build the WHERE clause. CASE: codInterlocutor  */
+	If (@INTERLOCUTOR > 0)
+         SELECT @sql1 = @sql1 + ' AND codInterlocutor = ' + str(@INTERLOCUTOR)
+         
+/* check and build the WHERE clause. CASE: codDireccion  */
+	If (@CODDIRECCION > 0)
+         SELECT @sql1 = @sql1 + ' AND codDireccion = ' + str(@CODDIRECCION)  
+
+/* check and build the WHERE clause. CASE: FDTIPeticion.Descripcion  */
+    If (@OBSERVACIONES <> '')
+         SELECT @sql1 = @sql1 + ' AND Descripcion LIKE '''+ '%' + RTRIM(@OBSERVACIONES) + '%' + ''''    
+         
+/* check and build the WHERE clause. CASE: idEstado  */
+    If (@ESTADO <> 11)
+		SELECT @sql1 = @sql1 + ' AND idEstado = ' + STR(@ESTADO) 
+		
+/* check and build the WHERE clause. CASE: desc/asc order  */	
+	if (@PERFILUSER = 'DIR')
+        SELECT @sql1 = @sql1 + ' ORDER BY fecEnvio DESC'
+	else
+        SELECT @sql1 = @sql1 + ' ORDER BY fecCreacion ASC'
+        
+EXEC(@sql1)
+
+IF @@ERROR<>0
+	ROLLBACK TRAN
+ELSE
+	COMMIT TRAN
+	
+	
+	
+	
+	==============================================================
+
+USE [FromJobs]
+GO
+/****** Object:  StoredProcedure [dbo].[SearchOrders_Using_sp_Executesql]    Script Date: 11/24/2013 23:08:58 ******/
+SET ANSI_NULLS OFF
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+
+-- ==========================================================================================
+-- Author:		Jose Mari
+-- Create date: Oct 12 2012
+-- Description:	This stored procedure builds dynamic SQL and executes using sp_executesql
+--				OUTPUT: Descripction.
+-- ==========================================================================================
+
+ALTER PROCEDURE [dbo].[SearchOrders_Using_sp_Executesql]
+	 /* Input Parameters */
+	@ID_PETICION INT,
+	@FECHA_CREACION NVARCHAR(15),
+	@FECHA_HASTA1 NVARCHAR(15),
+	@FECHA_ENVIO NVARCHAR(15),
+	@FECHA_HASTA2 NVARCHAR(15),
+	@FECHA_FIRMA NVARCHAR(15),
+	@FECHA_HASTA3 NVARCHAR(15),
+	@PETICIONARIO INT,
+	@INTERLOCUTOR INT,
+	@CODDIRECCION INT,
+	@PERFILUSER CHAR(3),
+	@OBSERVACIONES NVARCHAR(200),
+	@ESTADO INT
+	
+AS
+
+SET TRANSACTION ISOLATION LEVEL READ COMMITTED
+Set NoCount ON
+    /* Variable Declaration */
+    Declare @SQLQuery AS NVARCHAR(2000)
+    Declare @ParamDefinition AS NVARCHAR(1000) 
+
+/* Build the Transact-SQL String with the input parameters */ 
+BEGIN TRAN
+    Set @SQLQuery = 
+    
+    'SELECT idPeticion, COALESCE(descripcion, '''') AS descripcion,
+		COALESCE(fecCreacion,NULL) as fecCreacion,
+        COALESCE(fecEnvio, NULL) AS fecEnvio,
+        COALESCE(fecFirma, NULL) AS fecFirma,
+        COALESCE(codPeticionario, '''') AS codPeticionario,
+        codInterlocutor, COALESCE(codDireccion, '''') AS codDireccion,
+        COALESCE(observaciones, '''') AS observaciones,
+        COALESCE(idEstado, '''') AS idEstado, ''idOtros'' = CASE
+        WHEN (Select count(*) from FDTIPeticion P 
+        inner join FDTIPeticionLinea PL on P.idPeticion=PL.idPeticion 
+        inner join FDTILineaProductosServicios PSL on PL.idPeticionLinea=PSL.idPeticionLinea 
+        inner join FDTIProductoServicio PS on PS.idProdServ=PSL.idProdServ where 
+        P.idPeticion=MP.idPeticion and PS.idOtro=''True'') > 0 THEN ''True'' ELSE ''False'' END FROM [dbo].FDTIPeticion MP where (1=1)' 
+
+/* check and build the WHERE clause. CASE: idPeticion  */
+    If (@ID_PETICION > 0)
+		Set @SQLQuery = @SQLQuery + ' AND idPeticion = @ID_PETICION' 
+         
+/* check and build the WHERE clause. CASE: fecCreacion  */
+    if (@FECHA_CREACION <> '' AND @FECHA_HASTA1 <> '') 
+		Set @SQLQuery = @SQLQuery + ' AND fecCreacion BETWEEN CONVERT(DATETIME, ''' + RTRIM(@FECHA_CREACION) + ''' , 103) AND CONVERT(DATETIME, ''' + @FECHA_HASTA1 + ''', 103)'
+	if (@FECHA_CREACION = '' AND @FECHA_HASTA1 <> '') 
+		Set @SQLQuery = @SQLQuery + ' AND fecCreacion <= CONVERT(DATETIME, ''' + RTRIM(@FECHA_HASTA1) + ''', 103)'
+	if (@FECHA_CREACION <> '' AND @FECHA_HASTA1 = '') 
+		Set @SQLQuery = @SQLQuery + ' AND fecCreacion >= CONVERT(DATETIME, ''' + RTRIM(@FECHA_CREACION) + ''', 103)'
+ 
+ /* check and build the WHERE clause. CASE: fecEnvio  */
+	if (@FECHA_ENVIO <> '' AND @FECHA_HASTA2 <> '') 
+		Set @SQLQuery = @SQLQuery + ' AND fecEnvio BETWEEN CONVERT(DATETIME, ''' + RTRIM(@FECHA_ENVIO) + ''' , 103) AND CONVERT(DATETIME, ''' + @FECHA_HASTA2 + ''', 103)'
+	if (@FECHA_ENVIO = '' AND @FECHA_HASTA2 <> '') 
+		Set @SQLQuery = @SQLQuery + ' AND fecEnvio <= CONVERT(DATETIME, ''' + RTRIM(@FECHA_HASTA2) + ''', 103)'
+	if (@FECHA_ENVIO <> '' AND @FECHA_HASTA2 = '') 
+		Set @SQLQuery = @SQLQuery + ' AND fecEnvio >= CONVERT(DATETIME, ''' + RTRIM(@FECHA_ENVIO) + ''', 103)'
+ 
+ /* check and build the WHERE clause. CASE: fecFirma  */
+	if (@FECHA_FIRMA <> '' AND @FECHA_HASTA3 <> '') 
+		Set @SQLQuery = @SQLQuery + ' AND fecEnvio BETWEEN CONVERT(DATETIME, ''' + RTRIM(@FECHA_FIRMA) + ''' , 103) AND CONVERT(DATETIME, ''' + @FECHA_HASTA3 + ''', 103)'
+	if (@FECHA_FIRMA = '' AND @FECHA_HASTA3 <> '') 
+		Set @SQLQuery = @SQLQuery + ' AND fecEnvio <= CONVERT(DATETIME, ''' + RTRIM(@FECHA_HASTA3) + ''', 103)'
+	if (@FECHA_FIRMA <> '' AND @FECHA_HASTA3 = '') 
+		Set @SQLQuery = @SQLQuery + ' AND fecEnvio >= CONVERT(DATETIME, ''' + RTRIM(@FECHA_FIRMA) + ''', 103)'
+    
+/* check and build the WHERE clause. CASE: codPeticionario  */
+	If (@PETICIONARIO > 0)
+         Set @SQLQuery = @SQLQuery + ' AND codPeticionario = @PETICIONARIO' 
+         
+/* check and build the WHERE clause. CASE: codInterlocutor  */
+	If (@INTERLOCUTOR > 0)
+         Set @SQLQuery = @SQLQuery + ' AND codInterlocutor = @INTERLOCUTOR'
+         
+/* check and build the WHERE clause. CASE: codDireccion  */
+	If (@CODDIRECCION > 0)
+         Set @SQLQuery = @SQLQuery + ' AND codDireccion = @CODDIRECCION'  
+
+/* check and build the WHERE clause. CASE: FDTIPeticion.Descripcion  */
+    If (@OBSERVACIONES <> '')
+         Set @SQLQuery = @SQLQuery + ' AND Descripcion LIKE '''+ '%' + RTRIM(@OBSERVACIONES) + '%' + ''''    
+    
+/* check and build the WHERE clause. CASE: idPeticion  */
+    If (@ESTADO <> 11)
+		Set @SQLQuery = @SQLQuery + ' AND idEstado = @ESTADO' 
+		
+/* check and build the WHERE clause. CASE: desc/asc order  */	
+	if (@PERFILUSER = 'DIR')
+        Set @SQLQuery = @SQLQuery + ' ORDER BY fecEnvio DESC'
+	else
+        Set @SQLQuery = @SQLQuery + ' ORDER BY fecCreacion ASC'
+        
+   
+/* Specify Parameter Format for all input parameters included in the stmt */
+    Set @ParamDefinition = ' @ID_PETICION INT,
+		@FECHA_CREACION NVARCHAR(15),
+		@FECHA_HASTA1 NVARCHAR(15),
+		@FECHA_ENVIO NVARCHAR(15),
+		@FECHA_HASTA2 NVARCHAR(15),
+		@FECHA_FIRMA NVARCHAR(15),
+		@FECHA_HASTA3 NVARCHAR(15),
+		@PETICIONARIO INT,
+		@INTERLOCUTOR INT,
+		@CODDIRECCION INT,
+		@PERFILUSER CHAR(3),
+		@OBSERVACIONES NVARCHAR(200),
+		@ESTADO INT'
+                
+/* Execute the Transact-SQL String with all parameter value's Using sp_executesql Command */
+    Execute sp_Executesql	@SQLQuery,
+		@ParamDefinition,
+        @ID_PETICION,
+        @FECHA_CREACION,
+		@FECHA_HASTA1,
+		@FECHA_ENVIO,
+		@FECHA_HASTA2,
+		@FECHA_FIRMA,
+		@FECHA_HASTA3,
+        @PETICIONARIO,
+        @INTERLOCUTOR,
+		@CODDIRECCION,
+        @PERFILUSER,
+		@OBSERVACIONES,
+		@ESTADO
+
+If @@ERROR <> 0 GoTo ErrorHandler
+    Set NoCount OFF
+    Return(0)
+  
+ErrorHandler:
+    Return(@@ERROR)
+
+
+
+
+
+
+
+
+
+
+Su cita se ha concertado de manera correcta. Por favor, anote o imprima los siguientes datos:
+
+OFICINA DE PRESTACIONES DE VALDEMORO
+SERVICIO PÚBLICO DE EMPLEO ESTATAL
+Dirección: C/. APÓSTOL SANTIAGO, 2
+Teléfono: 912722795
+Datos de la cita:
+Nombre, Apellidos: Jose Maria Barquin Pardo
+N.I.F./N.I.E.: 72715041N
+Número de cita: B - 111 (INFORMACIÓN/TRAMITACIÓN)
+Día: 04/12/2013
+Hora aproximada: 12:12
+
+Importante:
+Por favor, acuda a la oficina asignada en el día y hora indicados. Se ruega puntualidad.
+
+www.sepe.es: 03/12/2013 11:50:58
+
+
+
+
+
+
+
+//    var connection = new ActiveXObject("ADODB.Connection");
+
+//    var connectionstring = "Data Source=LAPTOP;Initial Catalog=SQLServerCatalog412;Integrated Security=SSPI;Provider=SQLOLEDB";
+
+//    connection.Open(connectionstring);
+//    var rs = new ActiveXObject("ADODB.Recordset");
+
+//    rs.Open("SELECT * FROM CS412Product", connection);
+//    rs.MoveFirst
+//    while (!rs.eof) {
+//        document.write(rs.fields(1));
+//        alert(rs.fields(1))
+//        rs.movenext;
+//    }
+
+//    rs.close;
+//    connection.close;
+
+
+
+http://www.codeskulptor.org/#user26_Y1ewYPTMlw_0.py
+
+http://www.codeskulptor.org/#user26_0oevPYre1I_1.py
+
+http://www.codeskulptor.org/#user26_hQPmOW4DZX_0.py
+http://www.codeskulptor.org/#user26_hQPmOW4DZX_1.py
+http://www.codeskulptor.org/#user26_hQPmOW4DZX_2.py
+http://www.codeskulptor.org/#user26_hQPmOW4DZX_3.py
+http://www.codeskulptor.org/#user26_hQPmOW4DZX_4.py
+
+
+If the thrust is on, you are supposed to draw a different part of the ship image (remember it is a sprite sheet).
+
+When trust is on your new image center is:
+
+[self.image_center[0] + self.image_size[0], self.image_center[1]]
+http://www.codeskulptor.org/#user26_hQPmOW4DZX_6.py
+http://www.codeskulptor.org/#user26_hQPmOW4DZX_7.py
+http://www.codeskulptor.org/#user26_hQPmOW4DZX_10.py
+http://www.codeskulptor.org/#user26_hQPmOW4DZX_11.py
+
+
+http://www.codeskulptor.org/#user26_FV4sCxQkBc_4.py
+http://www.codeskulptor.org/#user26_FV4sCxQkBc_5.py
+http://www.codeskulptor.org/#user26_FV4sCxQkBc_6.py
+http://www.codeskulptor.org/#user27_FV4sCxQkBc_7.py
+http://www.codeskulptor.org/#user27_FV4sCxQkBc_8.py
+www.codeskulptor.org/#user27_FV4sCxQkBc_8.py
+http://www.codeskulptor.org/#user27_FV4sCxQkBc_10.py
+http://www.codeskulptor.org/#user27_FV4sCxQkBc_11.py
+http://www.codeskulptor.org/#user27_v7fsfcaaB6_0.py
+http://www.codeskulptor.org/#user27_v7fsfcaaB6_1.py
+
+
+deferent 
+The correct answer is a circle centered on the earth around which the center of the epicycle was thought to move in the Ptolemaic system.
+
